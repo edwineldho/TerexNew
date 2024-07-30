@@ -1,0 +1,32 @@
+Read every line which is required
+Specification array is the array which contains the values like [Price Level, Data Version...]
+
+
+For each line
+	If Data code is present || if line is present in specification array then append line as an element to an array
+        Else join line with previous line element
+# Now every line has been combined into one line
+For each line
+   If line in Specification array then assign then GLOBAL spec = line, break
+   Else:  
+   	Extract Datacode using pattern xxx_xxx
+   	Until a "double whitespace" is encountered, everything else is considered description, extract accordingly
+   	If double whitespace encountered then replace it with a comma, then subsequent white space with another comma #This would take the first number as the front, and the subsequent number as the rear weights. They are separated by whitespace. 
+	
+
+You don't even need to extract anything. All you have to do is add a comma between the extraction points. CSV file automatically created...
+Then it is easy to convert from CSV to Excel
+
+Other tasks which need to be done
+
+1.
+ Have to make sure that the lines which are present are only required. Read techniques need to be studied
+2. Once all parts identified, how do you append it to a CSV file
+2. 
+
+
+Function to detect/extraction data code pattern
+
+1. Extract the first 9 characters in 1 line
+2. Use RegEx to pattern match according to *xxx_xxx* 
+* is a white space
