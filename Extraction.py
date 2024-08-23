@@ -6,22 +6,31 @@ import os
 import shutil
 
 
-def Start(file_name, model, year, file_path):
+def Start(model, year, file_path):
     pageText = read(file_path)
     if "SP E C I F I C A T I O N  PR O P O S A L" in pageText:
         SpecMethod(file_path, model, year)
     else:
         QuoteMethod(file_path, model, year)
 
-
-def read(Filename):
-    reader = PdfReader(Filename) 
-    numPages = len(reader.pages)
-    pageText = ""
-    for i in range (numPages):
-        page = reader.pages[i]
-        pageText = pageText + page.extract_text()
-    return pageText
+def read(file_path):
+    try:
+        reader = PdfReader(file_path) 
+        numPages = len(reader.pages)
+        pageText = ""
+        for i in range(numPages):
+            page = reader.pages[i]
+            text = page.extract_text()
+            if text:
+                pageText += text
+            else:
+                print(f"Warning: Unable to extract text from page {i+1} in {os.path.basename(file_path)}")
+        return pageText
+    except FileNotFoundError:
+        print(f"Error: The file {os.path.basename(file_path)} was not found.")
+    except Exception as e:
+        print(f"Error processing file {os.path.basename(file_path)}: {e}")
+    return ""
 
 def CropPDF(input_string, keyword1, keyword2):
     start_index = input_string.find(keyword1)
@@ -112,7 +121,7 @@ def removeColonSpace(text):
         processed_lines.append(''.join(processed_line))
     return '\n'.join(processed_lines)
 
-def Extract(text, Headings):
+def Extract(text, Headings, model, year, file_path):
     #pattern = re.compile(r'^\s*(.*?)\s+([A-Za-z0-9]{3}-[A-Za-z0-9]{3})')
     pattern = re.compile(r'^\s*(.*?)\s+([A-Za-z0-9]{3}\s*-\s*[A-Za-z0-9]{3})')
     extracted_data = []
@@ -155,10 +164,10 @@ def Extract(text, Headings):
                     number2 = 0 
             else:
                 number2 = 0
-        extracted_data.append([keyword, xxx_xxx, large_string, number1, number2, extra])
+        extracted_data.append([keyword, xxx_xxx, large_string, number1, number2, extra, year, model, file_path])
     return extracted_data
 
-def QuoteExtract(text, Headings):
+def QuoteExtract(text, Headings, model, year, file_path):
     extracted_data = []
     bracket_value = None
     for line in text.splitlines():
@@ -189,49 +198,56 @@ def QuoteExtract(text, Headings):
             number2 = int(float(number_matches[1]))
         except ValueError:
             number2 = 0  
-        extracted_data.append([heading, bracket_value, number1, number2])
+        extracted_data.append([heading, bracket_value, number1, number2, year, model, file_path])
     return extracted_data
 
-def SpecMethod(Filename, model, year):
-    pageText12 = read(Filename)
+def SpecMethod(file_path, model, year):
+    original_path = 'C:\\NewOutput'
+    pageText12 = read(file_path)
     keyword1 = "SP E C I F I C A T I O N  PR O P O S A L"
     keyword2 ="T O T A L  V E H I C L E  S U M M A R Y"
     Headings = ["Price Level" , "Data Version", "Interior Convenience/Driver Retention Package", "Vehicle Configuration", "General Service", "Truck Service", "Engine", "Electronic Parameters", "Engine Equipment", "Transmission", "Transmission Equipment", "Front Axle and Equipment", "Front Suspension", "Rear Axle and Equipment", "Rear Suspension", "Brake System", "Trailer Connections", "Wheelbase & Frame", "Chassis Equipment", "Fuel Tanks", "Tires", "Hubs", "Wheels",
                 "Cab Exterior", "Cab Interior", "Instruments & Controls", "Design", "Color", "Certification / Compliance", "Secondary Factory Options", "Sales Programs"]
     pageText1 = CropPDF(pageText12,keyword1,keyword2)
     if pageText1 == None:
-        print(Filename)
+        print(file_path)
         return 0
     pageText1 = Cleaning2(pageText1,"Retail  Price","Prepared for:", "Rear")
     pageText1 = removeEmpty(pageText1)
     pageText1 = JoinGaps(pageText1, Headings)
     pageText1 = AddHeading( pageText1, Headings)
     pageText1 = removeColonSpace(pageText1)
-    FinalArray = Extract(pageText1, Headings)
-    Warranty = WarrantyExtraction(Filename)
+    FinalArray = Extract(pageText1, Headings, model, year, file_path)
+    Warranty = WarrantyExtraction(file_path, model, year)
     FinalArray = FinalArray + Warranty
     FinalCSV = pd.DataFrame(FinalArray)
+    FinalCSV.columns = ["Heading", "Data Code", "Description", "Weight Front", "Weight Rear", "Retail Price", "Year", "Word Order", "File Path"]
     with pd.ExcelWriter('Spec.xlsx') as writer:
-        FinalCSV.to_excel(writer, index=False)
-    original_path = 'C:\\NewOutput'
+        FinalCSV.to_excel(writer)
     destination_dir = os.path.join(os.path.join(original_path, year),model)
     os.makedirs(destination_dir, exist_ok=True)
     shutil.move('Spec.xlsx', os.path.join(destination_dir, 'Spec.xlsx'))
+    weightsumm(file_path, model, year)
     
-def QuoteMethod(Filename, model, year):
-    pageText = read(Filename)
+def QuoteMethod(file_path, model, year):
+    original_path = "C:\\NewOutput"
+    pageText = read(file_path)
     QuoteHeadings = ["VEHICLE PRICE", "EXTENDED WARRANTY", "CUSTOMER PRICE BEFORE TAX", "BALANCE DUE ", "CUSTOMER PRICE BEFORE TAX", "FEDERAL EXCISE TAX (FET)", "BALANCE DUE" ]
-    FinalArray = QuoteExtract(pageText, QuoteHeadings)
+    FinalArray = QuoteExtract(pageText, QuoteHeadings, model, year, file_path)
     FinalCSV = pd.DataFrame(FinalArray)
+    if(FinalCSV.shape == (0,0)):
+        return 0
+    FinalCSV = FinalCSV.drop(FinalCSV.columns[0], axis=1)
+
+    FinalCSV.columns = ["Number of Units", "Price per Unit", "Total Price", "Year", "Work Order", "File Path"]
     with pd.ExcelWriter('Quote.xlsx') as writer:
         FinalCSV.to_excel(writer, index=False)
-    original_path = "C:\\NewOutput"
     destination_dir = os.path.join(os.path.join(original_path, year),model)
     os.makedirs(destination_dir, exist_ok=True)
     shutil.move('Quote.xlsx', os.path.join(destination_dir, 'Quote.xlsx'))
 
-def WarrantyExtraction(Filename):
-    pageText1 = read(Filename)
+def WarrantyExtraction(file_path, model, year):
+    pageText1 = read(file_path)
     pageText = CropPDF2(pageText1,"Extended Warranty",5)
     if (pageText == None):
         print(pageText1)
@@ -242,13 +258,19 @@ def WarrantyExtraction(Filename):
         processed_lines.append("Extended Warranty " + stripped_line)
     pageText = '\n'.join(processed_lines)
     Headings = ["Extended Warranty"]
-    FinalArray = Extract(pageText, Headings)
+    FinalArray = Extract(pageText, Headings, model, year, file_path)
     return FinalArray
 
-def weightsumm():
-    pageText = read()
+def weightsumm(file_path, model, year):
+    original_path = 'C:\\NewOutput'
+    pageText = read(file_path)
     Headings = ["Factory Weight", "Dealer Installed Options", "Total Weight"]
-    pageText = CropPDF(pageText, "T O T A L  V E H I C L E  S U M M A R Y", "I T E M S  N O T  I N C L U D E D  I N  A D J U S T E D  L I S T")
+    pageText1 = CropPDF(pageText, "T O T A L  V E H I C L E  S U M M A R Y", "I T E M S  N O T  I N C L U D E D  I N  A D J U S T E D  L I S T")
+    if pageText1 == None:
+        pageText2 = CropPDF(pageText, "T O T A L  V E H I C L E  S U M M A R Y", "Extended Warranty")
+        if pageText2 == None:
+            print(file_path)
+            return 0
     pageText = Cleaning2(pageText, "Rear  Total", "Adjusted List Price", "")
     pattern = re.compile(r'\b(\d+)\s+lbs\b')
     extracted_data = []
@@ -272,10 +294,15 @@ def weightsumm():
         except ValueError:
             continue 
 
-        extracted_data.append([heading, number1, number2, number3])
+        extracted_data.append([heading, number1, number2, number3, year, model])
         FinalCSV = pd.DataFrame(extracted_data)
-        with pd.ExcelWriter('TestV2.6.xlsx') as writer:
+        FinalCSV = FinalCSV.drop(FinalCSV.columns[0], axis=1)
+        FinalCSV.columns = ["Weight Front", "Weight Rear", "Total Weight", "Year", "Work Order"]
+        with pd.ExcelWriter('WeightSummary.xlsx') as writer:
             FinalCSV.to_excel(writer, index=False)
+        destination_dir = os.path.join(os.path.join(original_path, year),model)
+        os.makedirs(destination_dir, exist_ok=True)
+        shutil.move('WeightSummary.xlsx', os.path.join(destination_dir, 'WeightSummary.xlsx'))
 
 input ="C:\\TerexClone\\Terex\\Freightliner\\inputs"
 for name in os.listdir(input):
@@ -290,6 +317,6 @@ for name in os.listdir(input):
                     file_path = os.path.join(sub_path, file)    
                     if os.path.isfile(file_path) and file_path.lower().endswith('.pdf'):
                         file_name = file
-                        Start(file_name, model, year, file_path) 
+                        Start(model, year, file_path) 
 
 
