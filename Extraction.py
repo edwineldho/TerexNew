@@ -6,43 +6,88 @@ import os
 import shutil
 
 
-def Start(model, year, file_path):
-    pageText = read(file_path)
-    if "SP E C I F I C A T I O N  PR O P O S A L" in pageText:
-        SpecMethod(file_path, model, year)
+def start(model, year, file_path):
+    """
+    Starts the process by reading a file and determining whether to use the spec_method or quote_method.
+
+    Parameters:
+    model (str): The model of the item.
+    year (int): The year associated with the file.
+    file_path (str): The path to the PDF file.
+
+    Returns:
+    None
+    """
+    page_text = read(file_path)
+    if "SP E C I F I C A T I O N  PR O P O S A L" in page_text:
+        spec_method(file_path, model, year)
     else:
-        QuoteMethod(file_path, model, year)
+        quote_method(file_path, model, year)
+
 
 def read(file_path):
+    """
+    Reads the text from a PDF file and returns the extracted content.
+
+    Parameters:
+    file_path (str): The path to the PDF file.
+
+    Returns:
+    str: Extracted text from the PDF, or an empty string if an error occurs.
+    """
     try:
-        reader = PdfReader(file_path) 
-        numPages = len(reader.pages)
-        pageText = ""
-        for i in range(numPages):
+        reader = PdfReader(file_path)
+        num_pages = len(reader.pages)
+        page_text = ""
+        for i in range(num_pages):
             page = reader.pages[i]
             text = page.extract_text()
             if text:
-                pageText += text
+                page_text += text
             else:
-                print(f"Warning: Unable to extract text from page {i+1} in {os.path.basename(file_path)}")
-        return pageText
+                print(f"Warning: Unable to extract text from page {i + 1} in {os.path.basename(file_path)}")
+        return page_text
     except FileNotFoundError:
         print(f"Error: The file {os.path.basename(file_path)} was not found.")
     except Exception as e:
         print(f"Error processing file {os.path.basename(file_path)}: {e}")
     return ""
 
-def CropPDF(input_string, keyword1, keyword2):
+
+def crop_pdf(input_string, keyword1, keyword2):
+    """
+    Crops text between two specified keywords from a string.
+
+    Parameters:
+    input_string (str): The input text to be cropped.
+    keyword1 (str): The starting keyword for cropping.
+    keyword2 (str): The ending keyword for cropping.
+
+    Returns:
+    str: The cropped text, or None if keywords are not found or in the wrong order.
+    """
     start_index = input_string.find(keyword1)
     end_index = input_string.find(keyword2)
     if start_index == -1 or end_index == -1 or start_index >= end_index:
         return None
-    start_index += len(keyword1)    
+    start_index += len(keyword1)
     result = input_string[start_index:end_index].strip()
     return result
 
-def CropPDF2(input_string, keyword, n):
-    lines = input_string.split('\n') 
+
+def crop_pdf2(input_string, keyword, n):
+    """
+    Crops text around a specific keyword and returns a certain number of lines after the keyword.
+
+    Parameters:
+    input_string (str): The input text to search within.
+    keyword (str): The keyword to locate in the text.
+    n (int): The number of lines to include after the keyword.
+
+    Returns:
+    str: Cropped text containing the keyword and subsequent lines, or None if the keyword is not found.
+    """
+    lines = input_string.split('\n')
     result_lines = []
     for i, line in enumerate(lines):
         if keyword in line:
@@ -53,7 +98,20 @@ def CropPDF2(input_string, keyword, n):
     result = '\n'.join(result_lines)
     return result
 
-def Cleaning2(text, keyword1, keyword2, keyword3):
+
+def cleaning2(text, keyword1, keyword2, keyword3):
+    """
+    Cleans text by removing unwanted lines between specific keywords.
+
+    Parameters:
+    text (str): The text to be cleaned.
+    keyword1 (str): The first keyword to search for.
+    keyword2 (str): The keyword to be removed.
+    keyword3 (str): The fallback keyword to search for if keyword1 is not present.
+
+    Returns:
+    str: The cleaned text with unnecessary lines and keywords removed.
+    """
     lines = text.split('\n')
     i = 0
     keyword_to_use = keyword1 if keyword1 in text else keyword3
@@ -61,27 +119,48 @@ def Cleaning2(text, keyword1, keyword2, keyword3):
         if lines[i].strip() == keyword_to_use:
             j = i - 1
             while j >= 0 and keyword2 not in lines[j]:
-                j -= 1            
+                j -= 1
             if j >= 0 and keyword2 in lines[j]:
                 lines = lines[:j] + [lines[j].replace(keyword2, '').strip()] + lines[i + 1:]
-                i = j 
+                i = j
                 continue
         i += 1
     new_text = '\n'.join(lines)
     return new_text
 
-def removeEmpty(text):
+
+def remove_empty(text):
+    """
+    Removes empty lines from a block of text.
+
+    Parameters:
+    text (str): The input text.
+
+    Returns:
+    str: The text with all empty lines removed.
+    """
     lines = text.split('\n')
     non_empty_lines = [line for line in lines if line.strip() != '']
     new_text = '\n'.join(non_empty_lines)
     return new_text
 
-def JoinGaps(text, predefined_array):
-    pattern = re.compile(r'^\s*[A-Za-z0-9]{3}-[A-Za-z0-9]{3}')    
-    lines = text.split('\n')    
+
+def join_gaps(text, predefined_array):
+    """
+    Joins lines that should belong together based on a pattern or a predefined array.
+
+    Parameters:
+    text (str): The input text to process.
+    predefined_array (list of str): Array of predefined patterns to keep separate.
+
+    Returns:
+    str: The processed text with lines joined based on the pattern or predefined array.
+    """
+    pattern = re.compile(r'^\s*[A-Za-z0-9]{3}-[A-Za-z0-9]{3}')
+    lines = text.split('\n')
     processed_lines = []
     for line in lines:
-        if (pattern.match(line) or line.strip() in predefined_array):
+        if pattern.match(line) or line.strip() in predefined_array:
             processed_lines.append(line)
         else:
             if processed_lines:
@@ -90,7 +169,18 @@ def JoinGaps(text, predefined_array):
                 processed_lines.append(line.strip())
     return '\n'.join(processed_lines)
 
-def AddHeading(text, predefined_array):
+
+def add_heading(text, predefined_array):
+    """
+    Adds headings to text lines based on predefined keywords.
+
+    Parameters:
+    text (str): The input text.
+    predefined_array (list of str): Array of predefined headings.
+
+    Returns:
+    str: The text with headings added to the corresponding lines.
+    """
     lines = text.split('\n')
     processed_lines = []
     current_predefined = None
@@ -105,7 +195,17 @@ def AddHeading(text, predefined_array):
                 processed_lines.append(line)
     return '\n'.join(processed_lines)
 
-def removeColonSpace(text):
+
+def remove_colon_space(text):
+    """
+    Removes spaces after colons in a block of text.
+
+    Parameters:
+    text (str): The input text to process.
+
+    Returns:
+    str: The text with spaces after colons removed.
+    """
     processed_lines = []
     for line in text.splitlines():
         processed_line = []
@@ -114,15 +214,28 @@ def removeColonSpace(text):
             char = line[i]
             if char == ':' and i + 1 < len(line) and line[i + 1] == ' ':
                 processed_line.append(char)
-                i += 2 
+                i += 2  # Increment by 2 to skip the space after the colon
             else:
                 processed_line.append(char)
                 i += 1
         processed_lines.append(''.join(processed_line))
     return '\n'.join(processed_lines)
 
-def Extract(text, Headings, model, year, file_path):
-    #pattern = re.compile(r'^\s*(.*?)\s+([A-Za-z0-9]{3}-[A-Za-z0-9]{3})')
+
+def extract(text, headings, model, year, file_path):
+    """
+    Extracts structured data from text based on a pattern and headings.
+
+    Parameters:
+    text (str): The input text.
+    headings (list of str): A list of valid headings to look for.
+    model (str): The model of the item.
+    year (int): The year associated with the data.
+    file_path (str): The file path of the document being processed.
+
+    Returns:
+    list: A list of extracted data, where each item is a list containing the extracted fields.
+    """
     pattern = re.compile(r'^\s*(.*?)\s+([A-Za-z0-9]{3}\s*-\s*[A-Za-z0-9]{3})')
     extracted_data = []
     for line in text.splitlines():
@@ -131,14 +244,14 @@ def Extract(text, Headings, model, year, file_path):
             continue
         keyword = match.group(1)
         xxx_xxx = match.group(2)
-        if keyword not in Headings:
+        if keyword not in headings:
             continue
         rest_of_line = line[match.end():].strip()
-        parts = rest_of_line.split('  ', 1)  
+        parts = rest_of_line.split('  ', 1)
         large_string = parts[0].strip() if parts else ''
         number1 = 0
         number2 = 0
-        extra = 0  
+        extra = 0
         if len(parts) > 1:
             if parts[1] and parts[1][0] == ' ':
                 parts[1] = '0 ' + parts[1][1:]
@@ -152,28 +265,40 @@ def Extract(text, Headings, model, year, file_path):
             if dollar_match:
                 numbers_part = numbers_part.replace(dollar_match.group(), '')
             numbers = re.split(r'\s{1,2}', numbers_part.strip())
-            if len(numbers) > 0 and numbers[0]: 
+            if len(numbers) > 0 and numbers[0]:
                 try:
                     number1 = int(float(numbers[0]))
                 except ValueError:
-                    number1 = 0 
-            if len(numbers) > 1 and numbers[1]: 
+                    number1 = 0
+            if len(numbers) > 1 and numbers[1]:
                 try:
                     number2 = int(float(numbers[1]))
                 except ValueError:
-                    number2 = 0 
-            else:
-                number2 = 0
+                    number2 = 0
         extracted_data.append([keyword, xxx_xxx, large_string, number1, number2, extra, year, model, file_path])
     return extracted_data
 
-def QuoteExtract(text, Headings, model, year, file_path):
+
+def quote_extract(text, headings, model, year, file_path):
+    """
+    Extracts quote-related data from text using specific patterns and keywords.
+
+    Parameters:
+    text (str): The input text to extract from.
+    headings (list of str): A list of valid headings to search for.
+    model (str): The model of the item.
+    year (int): The year associated with the data.
+    file_path (str): The file path of the document being processed.
+
+    Returns:
+    list: A list of extracted quote data, where each item is a list containing the extracted fields.
+    """
     extracted_data = []
     bracket_value = None
     for line in text.splitlines():
         line = line.strip().replace(',', '')
         heading = None
-        for h in Headings:
+        for h in headings:
             if line.startswith(h):
                 heading = h
                 rest_of_line = line[len(h):].strip()
@@ -186,137 +311,225 @@ def QuoteExtract(text, Headings, model, year, file_path):
             bracket_value = bracket_match.group(1)
             rest_of_line = rest_of_line.replace(bracket_match.group(0), '').strip()
         elif bracket_value is None:
-            continue 
+            continue
         number_matches = re.findall(r'\$([\d.]+)', rest_of_line)
         if len(number_matches) < 2:
-            continue  
+            continue
         try:
             number1 = int(float(number_matches[0]))
         except ValueError:
-            number1 = 0  
+            number1 = 0
         try:
             number2 = int(float(number_matches[1]))
         except ValueError:
-            number2 = 0  
+            number2 = 0
         extracted_data.append([heading, bracket_value, number1, number2, year, model, file_path])
     return extracted_data
 
-def SpecMethod(file_path, model, year):
+
+def spec_method(file_path, model, year):
+    """
+    Processes a specification PDF by extracting and cleaning data, and generating an Excel sheet.
+
+    Parameters:
+    file_path (str): The path to the PDF file.
+    model (str): The model name.
+    year (int): The year of the data.
+
+    Returns:
+    None
+    """
     original_path = 'C:\\NewOutput'
-    pageText12 = read(file_path)
+    page_text = read(file_path)  
     keyword1 = "SP E C I F I C A T I O N  PR O P O S A L"
-    keyword2 ="T O T A L  V E H I C L E  S U M M A R Y"
-    Headings = ["Price Level" , "Data Version", "Interior Convenience/Driver Retention Package", "Vehicle Configuration", "General Service", "Truck Service", "Engine", "Electronic Parameters", "Engine Equipment", "Transmission", "Transmission Equipment", "Front Axle and Equipment", "Front Suspension", "Rear Axle and Equipment", "Rear Suspension", "Brake System", "Trailer Connections", "Wheelbase & Frame", "Chassis Equipment", "Fuel Tanks", "Tires", "Hubs", "Wheels",
-                "Cab Exterior", "Cab Interior", "Instruments & Controls", "Design", "Color", "Certification / Compliance", "Secondary Factory Options", "Sales Programs"]
-    pageText1 = CropPDF(pageText12,keyword1,keyword2)
-    if pageText1 == None:
+    keyword2 = "T O T A L  V E H I C L E  S U M M A R Y"
+    
+    headings = [ 
+        "Price Level", "Data Version", "Interior Convenience/Driver Retention Package", "Vehicle Configuration",
+        "General Service", "Truck Service", "Engine", "Electronic Parameters", "Engine Equipment", "Transmission",
+        "Transmission Equipment", "Front Axle and Equipment", "Front Suspension", "Rear Axle and Equipment",
+        "Rear Suspension", "Brake System", "Trailer Connections", "Wheelbase & Frame", "Chassis Equipment",
+        "Fuel Tanks", "Tires", "Hubs", "Wheels", "Cab Exterior", "Cab Interior", "Instruments & Controls", "Design",
+        "Color", "Certification / Compliance", "Secondary Factory Options", "Sales Programs"
+    ]
+
+    page_text_cropped = crop_pdf(page_text, keyword1, keyword2)  
+    if page_text_cropped is None: 
         print(file_path)
         return 0
-    pageText1 = Cleaning2(pageText1,"Retail  Price","Prepared for:", "Rear")
-    pageText1 = removeEmpty(pageText1)
-    pageText1 = JoinGaps(pageText1, Headings)
-    pageText1 = AddHeading( pageText1, Headings)
-    pageText1 = removeColonSpace(pageText1)
-    FinalArray = Extract(pageText1, Headings, model, year, file_path)
-    Warranty = WarrantyExtraction(file_path, model, year)
-    FinalArray = FinalArray + Warranty
-    FinalCSV = pd.DataFrame(FinalArray)
-    FinalCSV.columns = ["Heading", "Data Code", "Description", "Weight Front", "Weight Rear", "Retail Price", "Year", "Word Order", "File Path"]
+
+    page_text_cleaned = cleaning2(page_text_cropped, "Retail Price", "Prepared for:", "Rear")
+    page_text_cleaned = remove_empty(page_text_cleaned)
+    page_text_cleaned = join_gaps(page_text_cleaned, headings)
+    page_text_cleaned = add_heading(page_text_cleaned, headings)
+    page_text_cleaned = remove_colon_space(page_text_cleaned)
+
+    final_array = extract(page_text_cleaned, headings, model, year, file_path)
+    warranty = warranty_extraction(file_path, model, year)
+    final_array += warranty
+
+    final_csv = pd.DataFrame(final_array)
+    final_csv.columns = [
+        "Heading", "Data Code", "Description", "Weight Front", "Weight Rear", "Retail Price", "Year", "Work Order", 
+        "File Path"
+    ]
+
     with pd.ExcelWriter('Spec.xlsx') as writer:
-        FinalCSV.to_excel(writer)
-    destination_dir = os.path.join(os.path.join(original_path, year),model)
+        final_csv.to_excel(writer, index=False)
+
+    destination_dir = os.path.join(original_path, year, model)
     os.makedirs(destination_dir, exist_ok=True)
     shutil.move('Spec.xlsx', os.path.join(destination_dir, 'Spec.xlsx'))
-    weightsumm(file_path, model, year)
-    
-def QuoteMethod(file_path, model, year):
-    original_path = "C:\\NewOutput"
-    pageText = read(file_path)
-    QuoteHeadings = ["VEHICLE PRICE", "EXTENDED WARRANTY", "CUSTOMER PRICE BEFORE TAX", "BALANCE DUE ", "CUSTOMER PRICE BEFORE TAX", "FEDERAL EXCISE TAX (FET)", "BALANCE DUE" ]
-    FinalArray = QuoteExtract(pageText, QuoteHeadings, model, year, file_path)
-    FinalCSV = pd.DataFrame(FinalArray)
-    if(FinalCSV.shape == (0,0)):
-        return 0
-    FinalCSV = FinalCSV.drop(FinalCSV.columns[0], axis=1)
 
-    FinalCSV.columns = ["Number of Units", "Price per Unit", "Total Price", "Year", "Work Order", "File Path"]
+    weights_summary(file_path, model, year)
+
+
+def quote_method(file_path, model, year):
+    """
+    Processes a quote PDF by extracting relevant data and generating an Excel sheet.
+
+    Parameters:
+    file_path (str): The path to the PDF file.
+    model (str): The model name.
+    year (int): The year of the data.
+
+    Returns:
+    None
+    """
+    original_path = "C:\\NewOutput"
+    page_text = read(file_path)
+    
+    quote_headings = [
+        "VEHICLE PRICE", "EXTENDED WARRANTY", "CUSTOMER PRICE BEFORE TAX", "BALANCE DUE", "CUSTOMER PRICE BEFORE TAX", 
+        "FEDERAL EXCISE TAX (FET)", "BALANCE DUE"
+    ]
+    
+    final_array = quote_extract(page_text, quote_headings, model, year, file_path)
+    final_csv = pd.DataFrame(final_array)
+    
+    if final_csv.empty:
+        return 0
+    
+    final_csv = final_csv.drop(final_csv.columns[0], axis=1)
+    final_csv.columns = ["Number of Units", "Price per Unit", "Total Price", "Year", "Work Order", "File Path"]
+
     with pd.ExcelWriter('Quote.xlsx') as writer:
-        FinalCSV.to_excel(writer, index=False)
-    destination_dir = os.path.join(os.path.join(original_path, year),model)
+        final_csv.to_excel(writer, index=False)
+
+    destination_dir = os.path.join(original_path, year, model)
     os.makedirs(destination_dir, exist_ok=True)
     shutil.move('Quote.xlsx', os.path.join(destination_dir, 'Quote.xlsx'))
 
-def WarrantyExtraction(file_path, model, year):
-    pageText1 = read(file_path)
-    pageText = CropPDF2(pageText1,"Extended Warranty",5)
-    if (pageText == None):
-        print(pageText1)
-    lines = pageText.split('\n')
-    processed_lines = []
-    for line in lines:
-        stripped_line = line.strip()
-        processed_lines.append("Extended Warranty " + stripped_line)
-    pageText = '\n'.join(processed_lines)
-    Headings = ["Extended Warranty"]
-    FinalArray = Extract(pageText, Headings, model, year, file_path)
-    return FinalArray
 
-def weightsumm(file_path, model, year):
+def warranty_extraction(file_path, model, year):
+    """
+    Extracts warranty data from a PDF file.
+
+    Parameters:
+    file_path (str): The path to the PDF file.
+    model (str): The model name.
+    year (int): The year of the data.
+
+    Returns:
+    list: Extracted warranty data.
+    """
+    page_text = read(file_path)
+    cropped_text = crop_pdf2(page_text, "Extended Warranty", 5)
+    
+    if cropped_text is None:
+        print(page_text)
+
+    lines = cropped_text.split('\n')
+    processed_lines = ["Extended Warranty " + line.strip() for line in lines]
+    final_text = '\n'.join(processed_lines)
+
+    headings = ["Extended Warranty"]
+    final_array = extract(final_text, headings, model, year, file_path)
+
+    return final_array
+
+
+def weights_summary(file_path, model, year):
+    """
+    Extracts weight summary data from a PDF file and generates an Excel sheet.
+
+    Parameters:
+    file_path (str): The path to the PDF file.
+    model (str): The model name.
+    year (int): The year of the data.
+
+    Returns:
+    None
+    """
     original_path = 'C:\\NewOutput'
-    pageText = read(file_path)
-    Headings = ["Factory Weight", "Dealer Installed Options", "Total Weight"]
-    pageText1 = CropPDF(pageText, "T O T A L  V E H I C L E  S U M M A R Y", "I T E M S  N O T  I N C L U D E D  I N  A D J U S T E D  L I S T")
-    if pageText1 == None:
-        pageText2 = CropPDF(pageText, "T O T A L  V E H I C L E  S U M M A R Y", "Extended Warranty")
-        if pageText2 == None:
+    page_text = read(file_path)
+
+    headings = ["Factory Weight", "Dealer Installed Options", "Total Weight"]
+    cropped_text = crop_pdf(page_text, "T O T A L  V E H I C L E  S U M M A R Y", "I T E M S  N O T  I N C L U D E D  I N  A D J U S T E D  L I S T")
+
+    if cropped_text is None:
+        cropped_text = crop_pdf(page_text, "T O T A L  V E H I C L E  S U M M A R Y", "Extended Warranty")
+        if cropped_text is None:
             print(file_path)
             return 0
-    pageText = Cleaning2(pageText, "Rear  Total", "Adjusted List Price", "")
+
+    cleaned_text = cleaning2(cropped_text, "Rear Total", "Adjusted List Price", "")
     pattern = re.compile(r'\b(\d+)\s+lbs\b')
     extracted_data = []
-    for line in pageText.splitlines():
+
+    for line in cleaned_text.splitlines():
         line = line.strip()
         heading = None
-        for h in Headings:
+
+        for h in headings:
             if line.startswith(h):
                 heading = h
                 rest_of_line = line[len(h):].strip()
                 break
+
         if heading is None:
             continue
+
         matches = pattern.findall(rest_of_line)
         if len(matches) != 3:
-            continue 
+            continue
+
         try:
             number1 = int(matches[0])
             number2 = int(matches[1])
             number3 = int(matches[2])
         except ValueError:
-            continue 
+            continue
 
         extracted_data.append([heading, number1, number2, number3, year, model])
-        FinalCSV = pd.DataFrame(extracted_data)
-        FinalCSV = FinalCSV.drop(FinalCSV.columns[0], axis=1)
-        FinalCSV.columns = ["Weight Front", "Weight Rear", "Total Weight", "Year", "Work Order"]
-        with pd.ExcelWriter('WeightSummary.xlsx') as writer:
-            FinalCSV.to_excel(writer, index=False)
-        destination_dir = os.path.join(os.path.join(original_path, year),model)
-        os.makedirs(destination_dir, exist_ok=True)
-        shutil.move('WeightSummary.xlsx', os.path.join(destination_dir, 'WeightSummary.xlsx'))
 
-input ="C:\\TerexClone\\Terex\\Freightliner\\inputs"
-for name in os.listdir(input):
-    path = os.path.join(input, name)
+    final_csv = pd.DataFrame(extracted_data)
+    final_csv.columns = ["Weight Front", "Weight Rear", "Total Weight", "Year", "Work Order"]
+
+    with pd.ExcelWriter('WeightSummary.xlsx') as writer:
+        final_csv.to_excel(writer, index=False)
+
+    destination_dir = os.path.join(original_path, year, model)
+    os.makedirs(destination_dir, exist_ok=True)
+    shutil.move('WeightSummary.xlsx', os.path.join(destination_dir, 'WeightSummary.xlsx'))
+
+
+input_dir = "C:\\TerexClone\\Terex\\Freightliner\\inputs"  # Updated variable name to snake_case
+for name in os.listdir(input_dir):
+    path = os.path.join(input_dir, name)
+    
     if os.path.isdir(path):  
-        year = name      
+        year = name  # Removed redundant blank line for PEP 8 clarity
+        
         for sub_name in os.listdir(path):
             sub_path = os.path.join(path, sub_name)
+            
             if os.path.isdir(sub_path):  
                 model = sub_name 
+                
                 for file in os.listdir(sub_path):
-                    file_path = os.path.join(sub_path, file)    
+                    file_path = os.path.join(sub_path, file)
+                    
                     if os.path.isfile(file_path) and file_path.lower().endswith('.pdf'):
-                        file_name = file
-                        Start(model, year, file_path) 
-
-
+                        file_name = file  # Variable not used elsewhere; can be removed in future refactoring
+                        start(model, year, file_path)  # Changed camelCase to snake_case
