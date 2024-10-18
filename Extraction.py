@@ -19,11 +19,12 @@ def start(model, year, file_path):
     None
     """
     page_text = read(file_path)
-    if "SP E C I F I C A T I O N  PR O P O S A L" in page_text:
+    if("Q U O T A T I O N" in page_text):
+        quote_method(file_path, model, year)
+    elif ("SP E C I F I C A T I O N  PR O P O S A L" in page_text):
         spec_method(file_path, model, year)
     else:
-        quote_method(file_path, model, year)
-
+        print("NO KEYWORDS PRESENT")
 
 def read(file_path):
     """
@@ -75,14 +76,15 @@ def crop_pdf(input_string, keyword1, keyword2):
     return result
 
 
-def crop_pdf2(input_string, keyword, n):
+def crop_pdf2(input_string, keyword, n=None):
     """
     Crops text around a specific keyword and returns a certain number of lines after the keyword.
+    If n is not provided, it returns all remaining lines after the keyword.
 
     Parameters:
     input_string (str): The input text to search within.
     keyword (str): The keyword to locate in the text.
-    n (int): The number of lines to include after the keyword.
+    n (int, optional): The number of lines to include after the keyword. Defaults to None, which returns all remaining lines.
 
     Returns:
     str: Cropped text containing the keyword and subsequent lines, or None if the keyword is not found.
@@ -91,7 +93,10 @@ def crop_pdf2(input_string, keyword, n):
     result_lines = []
     for i, line in enumerate(lines):
         if keyword in line:
-            result_lines = lines[i:i + n + 1]
+            if n is None:
+                result_lines = lines[i:]  
+            else:
+                result_lines = lines[i:i + n + 1] 
             break
     if not result_lines:
         return None
@@ -279,53 +284,29 @@ def extract(text, headings, model, year, file_path):
     return extracted_data
 
 
-def quote_extract(text, headings, model, year, file_path):
-    """
-    Extracts quote-related data from text using specific patterns and keywords.
-
-    Parameters:
-    text (str): The input text to extract from.
-    headings (list of str): A list of valid headings to search for.
-    model (str): The model of the item.
-    year (int): The year associated with the data.
-    file_path (str): The file path of the document being processed.
-
-    Returns:
-    list: A list of extracted quote data, where each item is a list containing the extracted fields.
-    """
+def quote_extract(text, model, year, file_path):
+    text = crop_pdf2(text, "VEHICLE PRICE")
+    match = re.search(r'\((\d+)\)', text)
+    units = int(match.group(1)) if match else None
+    
+    text = re.sub(r'TOTAL # OF UNITS\s*\(.*?\)\s*', '', text)
+    text = re.sub(r'\(.*?\)', '', text)
+    
+    lines = text.splitlines()
     extracted_data = []
-    bracket_value = None
-    for line in text.splitlines():
-        line = line.strip().replace(',', '')
-        heading = None
-        for h in headings:
-            if line.startswith(h):
-                heading = h
-                rest_of_line = line[len(h):].strip()
-                break
-        if heading is None:
-            continue
-        rest_of_line = rest_of_line.strip().replace(' ', '')
-        bracket_match = re.search(r'\((\d+)\)', rest_of_line)
-        if bracket_match:
-            bracket_value = bracket_match.group(1)
-            rest_of_line = rest_of_line.replace(bracket_match.group(0), '').strip()
-        elif bracket_value is None:
-            continue
-        number_matches = re.findall(r'\$([\d.]+)', rest_of_line)
-        if len(number_matches) < 2:
-            continue
-        try:
-            number1 = int(float(number_matches[0]))
-        except ValueError:
-            number1 = 0
-        try:
-            number2 = int(float(number_matches[1]))
-        except ValueError:
-            number2 = 0
-        extracted_data.append([heading, bracket_value, number1, number2, year, model, file_path])
+    
+    pattern = re.compile(r'(.+?)\s*\$\s*([\d,]+)\s*\$\s*([\d,]+)')
+    
+    for line in lines:
+        match = pattern.search(line)
+        if match:
+            heading = match.group(1).strip()  
+            num1 = match.group(2).replace(',', '') 
+            num2 = match.group(3).replace(',', '')  
+        
+            extracted_data.append([heading, units, num1, num2, year, model, file_path])
+    
     return extracted_data
-
 
 def spec_method(file_path, model, year):
     """
@@ -339,7 +320,7 @@ def spec_method(file_path, model, year):
     Returns:
     None
     """
-    original_path = 'C:\\NewOutput'
+    original_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'outputs')
     page_text = read(file_path)  
     keyword1 = "SP E C I F I C A T I O N  PR O P O S A L"
     keyword2 = "T O T A L  V E H I C L E  S U M M A R Y"
@@ -396,26 +377,19 @@ def quote_method(file_path, model, year):
     Returns:
     None
     """
-    original_path = "C:\\NewOutput"
+    original_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'outputs')
     page_text = read(file_path)
     
-    quote_headings = [
-        "VEHICLE PRICE", "EXTENDED WARRANTY", "CUSTOMER PRICE BEFORE TAX", "BALANCE DUE", "CUSTOMER PRICE BEFORE TAX", 
-        "FEDERAL EXCISE TAX (FET)", "BALANCE DUE"
-    ]
-    
-    final_array = quote_extract(page_text, quote_headings, model, year, file_path)
+    final_array = quote_extract(page_text, model, year, file_path)
     final_csv = pd.DataFrame(final_array)
     
     if final_csv.empty:
         return 0
     
-    final_csv = final_csv.drop(final_csv.columns[0], axis=1)
-    final_csv.columns = ["Number of Units", "Price per Unit", "Total Price", "Year", "Work Order", "File Path"]
-
+    #final_csv = final_csv.drop(final_csv.columns[0], axis=1)
+    final_csv.columns = ["Line Items", "Number of Units", "Price per Unit", "Total Price", "Year", "Work Order", "File Path"]
     with pd.ExcelWriter('Quote.xlsx') as writer:
         final_csv.to_excel(writer, index=False)
-
     destination_dir = os.path.join(original_path, year, model)
     os.makedirs(destination_dir, exist_ok=True)
     shutil.move('Quote.xlsx', os.path.join(destination_dir, 'Quote.xlsx'))
@@ -461,7 +435,7 @@ def weights_summary(file_path, model, year):
     Returns:
     None
     """
-    original_path = 'C:\\NewOutput'
+    original_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'outputs')
     page_text = read(file_path)
 
     headings = ["Factory Weight", "Dealer Installed Options", "Total Weight"]
@@ -504,7 +478,7 @@ def weights_summary(file_path, model, year):
         extracted_data.append([heading, number1, number2, number3, year, model])
 
     final_csv = pd.DataFrame(extracted_data)
-    final_csv.columns = ["Weight Front", "Weight Rear", "Total Weight", "Year", "Work Order"]
+    final_csv.columns = ["Headings","Weight Front", "Weight Rear", "Total Weight","Year", "Model"]
 
     with pd.ExcelWriter('WeightSummary.xlsx') as writer:
         final_csv.to_excel(writer, index=False)
@@ -513,23 +487,42 @@ def weights_summary(file_path, model, year):
     os.makedirs(destination_dir, exist_ok=True)
     shutil.move('WeightSummary.xlsx', os.path.join(destination_dir, 'WeightSummary.xlsx'))
 
+def get_input_directory(input_dir=None):
+    """
+    Returns the input directory path. If input_dir is not specified, it defaults to 'inputs' 
+    folder in the script's current directory.
 
-input_dir = "C:\\TerexClone\\Terex\\Freightliner\\inputs"  # Updated variable name to snake_case
-for name in os.listdir(input_dir):
-    path = os.path.join(input_dir, name)
-    
-    if os.path.isdir(path):  
-        year = name  # Removed redundant blank line for PEP 8 clarity
+    Parameters:
+    input_dir (str): Optional path to the input directory. Defaults to None.
+
+    Returns:
+    str: The resolved input directory path.
+    """
+    if input_dir is None:
+        script_dir = os.path.dirname(os.path.abspath(__file__)) 
+        input_dir = os.path.join(script_dir, 'inputs')
+
+    return input_dir
+
+
+input_dir = get_input_directory() 
+if not os.path.exists(input_dir):
+    print(f"Error: The input directory '{input_dir}' does not exist.")
+else:
+    for name in os.listdir(input_dir):
+        path = os.path.join(input_dir, name)
         
-        for sub_name in os.listdir(path):
-            sub_path = os.path.join(path, sub_name)
+        if os.path.isdir(path):  
+            year = name
             
-            if os.path.isdir(sub_path):  
-                model = sub_name 
+            for sub_name in os.listdir(path):
+                sub_path = os.path.join(path, sub_name)
                 
-                for file in os.listdir(sub_path):
-                    file_path = os.path.join(sub_path, file)
+                if os.path.isdir(sub_path):  
+                    model = sub_name 
                     
-                    if os.path.isfile(file_path) and file_path.lower().endswith('.pdf'):
-                        file_name = file  # Variable not used elsewhere; can be removed in future refactoring
-                        start(model, year, file_path)  # Changed camelCase to snake_case
+                    for file in os.listdir(sub_path):
+                        file_path = os.path.join(sub_path, file)
+                        
+                        if os.path.isfile(file_path) and file_path.lower().endswith('.pdf'):
+                            start(model, year, file_path) 
