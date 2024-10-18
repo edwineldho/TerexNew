@@ -19,12 +19,16 @@ def start(model, year, file_path):
     None
     """
     page_text = read(file_path)
-    if("Q U O T A T I O N" in page_text):
+    stripped_text = page_text.lower().replace(" ", "")
+    if("quotation" in stripped_text):
         quote_method(file_path, model, year)
-    elif ("SP E C I F I C A T I O N  PR O P O S A L" in page_text):
+    elif ("specificationproposal" in stripped_text):
         spec_method(file_path, model, year)
     else:
-        print("NO KEYWORDS PRESENT")
+        print("UNable to Identify File Types")
+
+
+
 
 def read(file_path):
     """
@@ -504,7 +508,7 @@ def get_input_directory(input_dir=None):
 
     return input_dir
 
-
+    
 input_dir = get_input_directory() 
 if not os.path.exists(input_dir):
     print(f"Error: The input directory '{input_dir}' does not exist.")
